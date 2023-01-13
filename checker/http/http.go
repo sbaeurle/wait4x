@@ -54,6 +54,7 @@ type HTTP struct {
 	expectStatusCode      int
 	insecureSkipTLSVerify bool
 	noRedirect            bool
+	tlsConfig             *tls.Config
 }
 
 // New creates the HTTP checker
@@ -140,6 +141,12 @@ func WithExpectStatusCode(code int) Option {
 func WithInsecureSkipTLSVerify(insecureSkipTLSVerify bool) Option {
 	return func(h *HTTP) {
 		h.insecureSkipTLSVerify = insecureSkipTLSVerify
+	}
+}
+
+func WithCaFile(caFile string) Option {
+	return func(h *HTTP) {
+		h.tlsConfig = &tls.Config{}
 	}
 }
 
