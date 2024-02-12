@@ -16,13 +16,16 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"regexp"
 	"strings"
 	"time"
 	"wait4x.dev/v2/checker"
 )
+
+var hidePasswordRegexp = regexp.MustCompile(`([^/]+//[^/:]+):[^:@]+@`)
 
 // Option configures a Redis.
 type Option func(r *Redis)
@@ -69,7 +72,7 @@ func WithExpectKey(key string) Option {
 }
 
 // Identity returns the identity of the checker
-func (r Redis) Identity() (string, error) {
+func (r *Redis) Identity() (string, error) {
 	opts, err := redis.ParseURL(r.address)
 	if err != nil {
 		return "", fmt.Errorf("can't retrieve the checker identity: %w", err)
@@ -89,12 +92,12 @@ func (r *Redis) Check(ctx context.Context) error {
 	client := redis.NewClient(opts)
 
 	// Check Redis connection
-	_, err = client.WithContext(ctx).Ping().Result()
+	_, err = client.Ping(ctx).Result()
 	if err != nil {
 		if checker.IsConnectionRefused(err) {
 			return checker.NewExpectedError(
 				"failed to establish a connection to the redis server", err,
-				"dsn", r.address,
+				"dsn", hidePasswordRegexp.ReplaceAllString(r.address, `$1:***@`),
 			)
 		}
 
@@ -109,8 +112,8 @@ func (r *Redis) Check(ctx context.Context) error {
 	splittedKey := strings.Split(r.expectKey, "=")
 	keyHasValue := len(splittedKey) == 2
 
-	val, err := client.WithContext(ctx).Get(splittedKey[0]).Result()
-	if err == redis.Nil {
+	val, err := client.Get(ctx, splittedKey[0]).Result()
+	if errors.Is(err, redis.Nil) {
 		// Redis key does not exist.
 		return checker.NewExpectedError("the key doesn't exist", nil, "key", splittedKey[0])
 	}
